@@ -1,6 +1,6 @@
 {
   "name": "es6-promise",
-  "version": "3.2.1",
+  "version": "3.2.2",
   "description": "A polyfill for ES6-style Promises, tracking rsvp",
   "authors": [
     "Stefan Penner <stefan.penner@gmail.com>"

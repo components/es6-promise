@@ -7282,13 +7282,11 @@ var sinon = (function () { // eslint-disable-line no-unused-vars
                     exception = e;
                 }
 
-                if (typeof oldDone !== "function") {
-                    if (typeof exception !== "undefined") {
-                        sandbox.restore();
-                        throw exception;
-                    } else {
-                        sandbox.verifyAndRestore();
-                    }
+                if (typeof exception !== "undefined") {
+                    sandbox.restore();
+                    throw exception;
+                } else if (typeof oldDone !== "function") {
+                    sandbox.verifyAndRestore();
                 }
 
                 return result;
@@ -7994,8 +7992,8 @@ if (typeof sinon === "undefined") {
 
         sinon.ProgressEvent = function ProgressEvent(type, progressEventRaw, target) {
             this.initEvent(type, false, false, target);
-            this.loaded = progressEventRaw.loaded || null;
-            this.total = progressEventRaw.total || null;
+            this.loaded = typeof progressEventRaw.loaded === "number" ? progressEventRaw.loaded : null;
+            this.total = typeof progressEventRaw.total === "number" ? progressEventRaw.total : null;
             this.lengthComputable = !!progressEventRaw.total;
         };
 
@@ -8772,7 +8770,13 @@ if (typeof sinon === "undefined") {
     var supportsCustomEvent = typeof CustomEvent !== "undefined";
     var supportsFormData = typeof FormData !== "undefined";
     var supportsArrayBuffer = typeof ArrayBuffer !== "undefined";
-    var supportsBlob = typeof Blob === "function";
+    var supportsBlob = (function () {
+        try {
+            return !!new Blob();
+        } catch (e) {
+            return false;
+        }
+    })();
     var sinonXhr = { XMLHttpRequest: global.XMLHttpRequest };
     sinonXhr.GlobalXMLHttpRequest = global.XMLHttpRequest;
     sinonXhr.GlobalActiveXObject = global.ActiveXObject;
@@ -8808,10 +8812,11 @@ if (typeof sinon === "undefined") {
     // and uploadError.
     function UploadProgress() {
         this.eventListeners = {
-            progress: [],
-            load: [],
             abort: [],
-            error: []
+            error: [],
+            load: [],
+            loadend: [],
+            progress: []
         };
     }
 
@@ -9178,6 +9183,7 @@ if (typeof sinon === "undefined") {
                 this.readyState = state;
 
                 var readyStateChangeEvent = new sinon.Event("readystatechange", false, false, this);
+                var event, progress;
 
                 if (typeof this.onreadystatechange === "function") {
                     try {
@@ -9187,16 +9193,25 @@ if (typeof sinon === "undefined") {
                     }
                 }
 
-                switch (this.readyState) {
-                    case FakeXMLHttpRequest.DONE:
-                        if (supportsProgress) {
-                            this.upload.dispatchEvent(new sinon.ProgressEvent("progress", {loaded: 100, total: 100}));
-                            this.dispatchEvent(new sinon.ProgressEvent("progress", {loaded: 100, total: 100}));
-                        }
-                        this.upload.dispatchEvent(new sinon.Event("load", false, false, this));
-                        this.dispatchEvent(new sinon.Event("load", false, false, this));
-                        this.dispatchEvent(new sinon.Event("loadend", false, false, this));
-                        break;
+                if (this.readyState === FakeXMLHttpRequest.DONE) {
+                    if (this.status < 200 || this.status > 299) {
+                        progress = {loaded: 0, total: 0};
+                        event = this.aborted ? "abort" : "error";
+                    }
+                    else {
+                        progress = {loaded: 100, total: 100};
+                        event = "load";
+                    }
+
+                    if (supportsProgress) {
+                        this.upload.dispatchEvent(new sinon.ProgressEvent("progress", progress, this));
+                        this.upload.dispatchEvent(new sinon.ProgressEvent(event, progress, this));
+                        this.upload.dispatchEvent(new sinon.ProgressEvent("loadend", progress, this));
+                    }
+
+                    this.dispatchEvent(new sinon.ProgressEvent("progress", progress, this));
+                    this.dispatchEvent(new sinon.ProgressEvent(event, progress, this));
+                    this.dispatchEvent(new sinon.ProgressEvent("loadend", progress, this));
                 }
 
                 this.dispatchEvent(readyStateChangeEvent);
@@ -9275,14 +9290,6 @@ if (typeof sinon === "undefined") {
                 }
 
                 this.readyState = FakeXMLHttpRequest.UNSENT;
-
-                this.dispatchEvent(new sinon.Event("abort", false, false, this));
-
-                this.upload.dispatchEvent(new sinon.Event("abort", false, false, this));
-
-                if (typeof this.onerror === "function") {
-                    this.onerror();
-                }
             },
 
             getResponseHeader: function getResponseHeader(header) {
@@ -10956,7 +10963,7 @@ function hasOwnProperty(obj, prop) {
         lib$es6$promise$$internal$$makePromise(this.promise);
       }
 
-      if (Array.isArray(input)) {
+      if (lib$es6$promise$utils$$isArray(input)) {
         this._input     = input;
         this.length     = input.length;
         this._remaining = input.length;
